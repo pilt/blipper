@@ -10,9 +10,9 @@
 /* Types */
 struct packet_t 
 {
-  char type;
-  char length;
-  char payload[MAX_PAYLOAD_LENGTH];
+  uint8_t type;
+  uint8_t length;
+  uint8_t payload[MAX_PAYLOAD_LENGTH];
 };
 
 /* Preamble bytes */
