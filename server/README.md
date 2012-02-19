@@ -8,6 +8,10 @@ Use [macosxvirtualserialport](http://code.google.com/p/macosxvirtualserialport/)
 
 ## Tests
 
+Start the server:
+
+    $ python blipper.py
+
 Run:
 
     $ python tests.py

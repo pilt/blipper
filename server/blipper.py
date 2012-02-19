@@ -6,13 +6,17 @@ from serial import Serial
 TTY = '/dev/master'
 BAUD_RATE = 9600
 PREAMBLE = chr(0xaa) + chr(0x55)
-HEADER_FORMAT = "!BBH" # network/big-endian, unsigned char, unsigned char
-PAYLOAD_LENGTH_FORMAT = "!H" # network/big-endian, unsigned short
-HEAD_LENGTH = len(PREAMBLE) + 2 + 1
 
 
 class PacketError(Exception):
     pass
+
+
+packet_types = {}
+
+def packet_type(cls):
+    packet_types[cls.cmd] = cls
+    return cls
 
 
 def get_checksum(buf):
@@ -20,11 +24,6 @@ def get_checksum(buf):
     for byte in buf:
         checksum += ord(byte)
     return chr(checksum % 0xff)
-
-
-
-def pack_header(payload):
-    return struct.pack(PAYLOAD_LENGTH_FORMAT, len(payload))
 
 
 class Header(object):
@@ -40,63 +39,87 @@ def unpack_header(buf):
         raise PacketError("invalid header length")
     fields = struct.unpack("!BBBHB", buf[:6])
     preamble = chr(fields[0]) + chr(fields[1])
-    cmd = fields[2]
+    if preamble != PREAMBLE:
+        raise PacketError("invalid preamble")
+    cmd = chr(fields[2])
     length = fields[3]
     cs = chr(fields[4])
     cs_cmp = get_checksum(buf[:5])
     if cs != cs_cmp:
-        raise PacketError("%s != %s" % (cs, cs_cmp))
+        raise PacketError("invalid header checksum")
     return Header(cmd, length)
 
 
-class Command(object):
+class Packet(object):
 
-    def __init__(self, payload=None):
-        self.payload = payload or ''
+    def __init__(self):
+        self.body = ''
+
+    @classmethod
+    def from_body(cls, body):
+        return cls()
 
     def __str__(self):
         buf = PREAMBLE + self.cmd
-        buf += struct.pack("!H", len(self.payload))
+        buf += struct.pack("!H", len(self.body))
         buf += get_checksum(buf)
-        buf += self.payload
-        buf += get_checksum(self.payload)
+        buf += self.body
+        buf += get_checksum(self.body)
         return buf
 
 
-class RequestCommand(Command):
-    pass
+class Request(Packet):
+
+    def get_response(self):
+        raise NotImplementedError()
 
 
-class ResponseCommand(Command):
-    pass
+class Response(Packet):
+
+    def get_response(self):
+        return None
 
 
-class OkCommand(RequestCommand):
+@packet_type
+class Ok(Response):
     cmd = chr(0x00)
 
 
-class FailCommand(ResponseCommand):
+@packet_type
+class Fail(Response):
     cmd = chr(0x01)
 
 
-class PingCommand(RequestCommand):
+@packet_type
+class Ping(Request):
     cmd = chr(0x02)
 
+    def get_response(self):
+        return Pong()
 
-class PongCommand(ResponseCommand):
+
+@packet_type
+class Pong(Response):
     cmd = chr(0x03)
 
 
-def cycle(ser):
+def get_packet(ser):
     header = unpack_header(ser.read(Header.length))
     body = ser.read(header.body_length)
-    print header, body
+    cs = ser.read(1)
+    cs_cmp = get_checksum(body)
+    if cs != cs_cmp:
+        raise PacketError("invalid body checksum")
+    return packet_types[header.cmd].from_body(body)
 
 
 def main():
     try:
         ser = Serial(TTY, BAUD_RATE)
-        cycle(ser)
+        packet = get_packet(ser)
+        response = packet.get_response()
+        if response:
+            ser.write(bytes(response))
     except KeyboardInterrupt:
         ser.close()
         sys.exit()

@@ -3,7 +3,6 @@ import unittest
 from serial import Serial
 
 import blipper
-from blipper import BAUD_RATE
 
 TTY = '/dev/slave'
 
@@ -14,9 +13,10 @@ class TestBlipper(unittest.TestCase):
         self.ser = Serial(TTY, blipper.BAUD_RATE)
 
     def test_ping_ok(self):
-        ping = blipper.PingCommand()
-        packet = bytes(ping)
-        self.ser.write(packet)
+        ping = blipper.Ping()
+        self.ser.write(bytes(ping))
+        packet = blipper.get_packet(self.ser)
+        self.assertTrue(isinstance(packet, blipper.Pong))
 
     def tearDown(self):
         self.ser.close()
