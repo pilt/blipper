@@ -1,12 +1,20 @@
 import sys
 import struct
+import re
+import threading
+import time
+from collections import defaultdict
+import logging
 
 from serial import Serial
 
 TTY = '/dev/master'
 BAUD_RATE = 9600
 PREAMBLE = chr(0xaa) + chr(0x55)
+WIDTH = 128
+HEIGHT = 64
 
+logger = logging.getLogger('blipper')
 
 class PacketError(Exception):
     pass
@@ -57,7 +65,9 @@ class Packet(object):
 
     @classmethod
     def from_body(cls, body):
-        return cls()
+        obj = cls()
+        obj.body = body
+        return obj
 
     def __str__(self):
         buf = PREAMBLE + self.cmd
@@ -66,6 +76,9 @@ class Packet(object):
         buf += self.body
         buf += get_checksum(self.body)
         return buf
+
+    def __repr__(self):
+        return '<%s>' % self.__class__.__name__
 
 
 class Request(Packet):
@@ -103,25 +116,102 @@ class Pong(Response):
     cmd = chr(0x03)
 
 
-def get_packet(ser):
-    header = unpack_header(ser.read(Header.length))
-    body = ser.read(header.body_length)
-    cs = ser.read(1)
-    cs_cmp = get_checksum(body)
-    if cs != cs_cmp:
-        raise PacketError("invalid body checksum")
-    return packet_types[header.cmd].from_body(body)
+@packet_type
+class RedrawPixels(Request):
+    """
+    1 byte display index. 16 * 8  = 128 bytes pixel data. The data is
+    packed to 8 unsigned shorts (one unsigned short per row).
+    """
+    cmd = chr(0x04)
+    _row_pattern = re.compile("[01]{16}")
+
+    @classmethod
+    def from_matrix(cls, display, rows):
+        assert len(rows) == 8
+        row_ints = []
+        for row in rows:
+            assert len(row) == 16
+            buf = "".join(map(str, row))
+            if not cls._row_pattern.match(buf):
+                raise PacketError("invalid row data")
+            row_ints.append(int(buf, 2))
+        body = struct.pack("!BHHHHHHHH", display, *row_ints)
+        return RedrawPixels.from_body(body)
+
+    def get_response(self):
+        return Ok()
+
+
+class Thread(threading.Thread):
+
+    def __init__(self, tty=TTY, baud_rate=BAUD_RATE, logger=None, *args, **kwargs):
+        if logger is None:
+            self.logger = logging.getLogger('blipper.thread')
+        else:
+            self.logger = logger
+        super(Thread, self).__init__(*args, **kwargs)
+        self.tty = tty
+        self.baud_rate = baud_rate
+        self.ser = Serial(self.tty, self.baud_rate)
+        self.ser.nonblocking()
+        self.daemon = True
+        self._handlers = defaultdict(list)
+        self._should_exit = False
+        self.waiting_for_packet = False
+
+    def on(self, packet_type, handler):
+        self._handlers[packet_type].append(handler)
+
+    def off(self, packet_type, handler):
+        packet_handlers = self._handlers.get(packet_type, [])
+        new_handlers = [h for h in packet_handlers if h != handler]
+        self._handlers[packet_type] = new_handlers
+
+    def send(self, packet):
+        self.ser.write(bytes(packet))
+        self.logger.debug('sent %r', packet)
+
+    def get_packet(self):
+        self.waiting_for_packet = True
+        header = unpack_header(self.ser.read(Header.length))
+        body = self.ser.read(header.body_length)
+        cs = self.ser.read(1)
+        self.waiting_for_packet = False
+
+        cs_cmp = get_checksum(body)
+        if cs != cs_cmp:
+            raise PacketError("invalid body checksum")
+        packet = packet_types[header.cmd].from_body(body)
+        self.logger.debug('got %r', packet)
+        return packet
+
+    def run(self):
+        while True:
+            try:
+                packet = self.get_packet()
+                packet_handlers = self._handlers.get(type(packet), [])
+                for handler in packet_handlers:
+                    handler(packet)
+                response = packet.get_response()
+                if response:
+                    self.ser.write(bytes(response))
+            except Exception as e:
+                if self._should_exit: # exception expected
+                    break
+                else:
+                    raise e
+
+    def join(self, timeout=None):
+        self._should_exit = True
+        self.ser.close()
+        super(Thread, self).join(timeout)
 
 
 def main():
+    thread = Thread()
     try:
-        ser = Serial(TTY, BAUD_RATE)
-        packet = get_packet(ser)
-        response = packet.get_response()
-        if response:
-            ser.write(bytes(response))
+        thread.run()
     except KeyboardInterrupt:
-        ser.close()
         sys.exit()
 
 
