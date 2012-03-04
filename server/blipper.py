@@ -11,8 +11,6 @@ from serial import Serial
 TTY = '/dev/master'
 BAUD_RATE = 9600
 PREAMBLE = chr(0xaa) + chr(0x55)
-WIDTH = 128
-HEIGHT = 64
 
 logger = logging.getLogger('blipper')
 
