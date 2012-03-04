@@ -77,7 +77,7 @@ class TestBlipper(unittest.TestCase):
     def test_redraw_ok(self):
 
         display = 0
-        rows = [[1] * 16] * 8
+        rows = [[1] * 128] * 64
         redraw = blipper.RedrawPixels.from_matrix(display, rows)
         waiter = Waiter(bytes(redraw))
 

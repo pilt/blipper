@@ -119,23 +119,31 @@ class Pong(Response):
 @packet_type
 class RedrawPixels(Request):
     """
-    1 byte display index. 16 * 8  = 128 bytes pixel data. The data is
-    packed to 8 unsigned shorts (one unsigned short per row).
+    1 byte display index. A display has 128x64 pixels. Pixel data for one
+    row is packed to 16 bytes (128/8). 1B + 16B * 64  = 1,025 bytes display 
+    index and pixel data. 
     """
     cmd = chr(0x04)
-    _row_pattern = re.compile("[01]{16}")
+    num_rows = 64
+    num_cols = 128
+    _byte_buf_pattern = re.compile("[01]{%s}" % 8)
 
     @classmethod
     def from_matrix(cls, display, rows):
-        assert len(rows) == 8
-        row_ints = []
+        assert len(rows) == cls.num_rows 
+        body_byte_ints = []
         for row in rows:
-            assert len(row) == 16
-            buf = "".join(map(str, row))
-            if not cls._row_pattern.match(buf):
-                raise PacketError("invalid row data")
-            row_ints.append(int(buf, 2))
-        body = struct.pack("!BHHHHHHHH", display, *row_ints)
+            assert len(row) == cls.num_cols
+            for byte_start_idx in range(cls.num_cols)[::8]:
+                byte_end_idx = byte_start_idx + 8
+                buf = "".join(map(str, row[byte_start_idx:byte_end_idx]))
+                if not cls._byte_buf_pattern.match(buf):
+                    raise PacketError("invalid byte data")
+                body_byte_ints.append(int(buf, 2))
+        display_index_fmt = "B"
+        row_fmt = "B" * (cls.num_cols // 8)
+        fmt = "!" + display_index_fmt + row_fmt * cls.num_rows
+        body = struct.pack(fmt, display, *body_byte_ints)
         return RedrawPixels.from_body(body)
 
     def get_response(self):
