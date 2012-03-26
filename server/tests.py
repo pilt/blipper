@@ -94,12 +94,14 @@ class TestBlipper(unittest.TestCase):
 
     def test_buy_ok(self):
         button = 3
-        buy = blipper.Buy.from_button(button)
+        card_id = 2**32 - 5
+        buy = blipper.Buy.from_button_and_card_id(button, card_id)
         new_balance = 5000
-        waiter = Waiter(button, new_balance)
+        waiter = Waiter(button, new_balance, card_id)
 
         def on_buy(packet):
             waiter.got(packet.get_button())
+            waiter.got(packet.get_card_id())
             return blipper.NewBalance.from_new_balance(new_balance)
         self.slave.on(blipper.Buy, on_buy)
 
@@ -113,11 +115,13 @@ class TestBlipper(unittest.TestCase):
 
     def test_insufficient_funds(self):
         button = 2
-        buy = blipper.Buy.from_button(button)
-        waiter = Waiter(button, 1337)
+        card_id = 2**32 - 5
+        buy = blipper.Buy.from_button_and_card_id(button, card_id)
+        waiter = Waiter(button, 1337, card_id)
 
         def on_buy(packet):
             waiter.got(packet.get_button())
+            waiter.got(packet.get_card_id())
             return blipper.InsufficientFunds.from_balance(1337)
         self.slave.on(blipper.Buy, on_buy)
 
@@ -137,12 +141,24 @@ class TestBlipper(unittest.TestCase):
         }
 
         button_presses = [0, 1, 2]
-        buys = map(blipper.Buy.from_button, button_presses)
-        waiter = Waiter('b0', 'b1', 'b2', 'nb0', 'nb1', 'i1337')
+        card_id = 2**32 - 5
+        from_func = blipper.Buy.from_button_and_card_id
+        buys = [from_func(btn, card_id) for btn in button_presses]
+        waiter = Waiter(
+                'b0',
+                'b1',
+                'b2',
+                'nb0',
+                'nb1',
+                'i1337',
+                "c%s-0" % card_id,
+                "c%s-1" % card_id,
+                "c%s-2" % card_id)
 
         def on_buy(packet):
             got_button = packet.get_button()
             waiter.got('b%s' % got_button)
+            waiter.got('c%s-%s' % (packet.get_card_id(), got_button))
             return button_responses[got_button]
 
         self.slave.on(blipper.Buy, on_buy)
@@ -155,8 +171,7 @@ class TestBlipper(unittest.TestCase):
             waiter.got('i%s' % packet.get_balance())
         self.master.on(blipper.InsufficientFunds, on_insufficient)
 
-        for buy in buys:
-            self.master.send(buy)
+        map(self.master.send, buys)
         waiter.wait(1.0)
         self.assertTrue(waiter.has_all())
 

@@ -149,46 +149,52 @@ class RedrawPixels(Request):
 @packet_type
 class Buy(Request):
     cmd = chr(0x05)
+    fmt = "!BI"
 
     @classmethod
-    def from_button(self, button):
-        if 0 <= button <= 255:
-            body = struct.pack("!B", button)
+    def from_button_and_card_id(cls, button, card_id):
+        if 0 <= button <= 255 and 0 <= card_id <= 2**32 - 1:
+            body = struct.pack(cls.fmt, button, card_id)
             return Buy.from_body(body)
         raise BlipperError(button)
 
     def get_button(self):
-        return struct.unpack("!B", self.body)[0]
+        return struct.unpack(self.fmt, self.body)[0]
+
+    def get_card_id(self):
+        return struct.unpack(self.fmt, self.body)[1]
 
 
 @packet_type
 class NewBalance(Response):
     cmd = chr(0x06)
+    fmt = "!H"
 
     @classmethod
-    def from_new_balance(self, new_balance):
+    def from_new_balance(cls, new_balance):
         if 0 <= new_balance <= 65535:
-            body = struct.pack("!H", new_balance)
+            body = struct.pack(cls.fmt, new_balance)
             return NewBalance.from_body(body)
         raise BlipperError(new_balance)
 
     def get_new_balance(self):
-        return struct.unpack("!H", self.body)[0]
+        return struct.unpack(self.fmt, self.body)[0]
 
 
 @packet_type
 class InsufficientFunds(Response):
     cmd = chr(0x07)
+    fmt = "!H"
 
     @classmethod
-    def from_balance(self, balance):
+    def from_balance(cls, balance):
         if 0 <= balance <= 65535:
-            body = struct.pack("!H", balance)
+            body = struct.pack(cls.fmt, balance)
             return InsufficientFunds.from_body(body)
         raise BlipperError(balance)
 
     def get_balance(self):
-        return struct.unpack("!H", self.body)[0]
+        return struct.unpack(self.fmt, self.body)[0]
 
 
 
