@@ -14,8 +14,9 @@ PREAMBLE = chr(0xaa) + chr(0x55)
 
 logger = logging.getLogger('blipper')
 
-class PacketError(Exception):
-    pass
+class BlipperError(Exception): pass
+class PacketError(BlipperError): pass
+class MultipleResponses(BlipperError): pass
 
 
 packet_types = {}
@@ -81,13 +82,13 @@ class Packet(object):
 
 class Request(Packet):
 
-    def get_response(self):
-        raise NotImplementedError()
+    def default_response(self):
+        return Ok()
 
 
 class Response(Packet):
 
-    def get_response(self):
+    def default_response(self):
         return None
 
 
@@ -105,7 +106,7 @@ class Fail(Response):
 class Ping(Request):
     cmd = chr(0x02)
 
-    def get_response(self):
+    def default_response(self):
         return Pong()
 
 
@@ -144,8 +145,51 @@ class RedrawPixels(Request):
         body = struct.pack(fmt, display, *body_byte_ints)
         return RedrawPixels.from_body(body)
 
-    def get_response(self):
-        return Ok()
+
+@packet_type
+class Buy(Request):
+    cmd = chr(0x05)
+
+    @classmethod
+    def from_button(self, button):
+        if 0 <= button <= 255:
+            body = struct.pack("!B", button)
+            return Buy.from_body(body)
+        raise BlipperError(button)
+
+    def get_button(self):
+        return struct.unpack("!B", self.body)[0]
+
+
+@packet_type
+class NewBalance(Response):
+    cmd = chr(0x06)
+
+    @classmethod
+    def from_new_balance(self, new_balance):
+        if 0 <= new_balance <= 65535:
+            body = struct.pack("!H", new_balance)
+            return NewBalance.from_body(body)
+        raise BlipperError(new_balance)
+
+    def get_new_balance(self):
+        return struct.unpack("!H", self.body)[0]
+
+
+@packet_type
+class InsufficientFunds(Response):
+    cmd = chr(0x07)
+
+    @classmethod
+    def from_balance(self, balance):
+        if 0 <= balance <= 65535:
+            body = struct.pack("!H", balance)
+            return InsufficientFunds.from_body(body)
+        raise BlipperError(balance)
+
+    def get_balance(self):
+        return struct.unpack("!H", self.body)[0]
+
 
 
 class Thread(threading.Thread):
@@ -166,6 +210,12 @@ class Thread(threading.Thread):
         self.waiting_for_packet = False
 
     def on(self, packet_type, handler):
+        """Register a handler for the given packet type.
+
+        If there are multiple handlers for a packet type, at most one
+        should return a response. If no handler returns a response, a
+        default OK response will be sent back.
+        """
         self._handlers[packet_type].append(handler)
 
     def off(self, packet_type, handler):
@@ -195,11 +245,18 @@ class Thread(threading.Thread):
         while True:
             try:
                 packet = self.get_packet()
+                response = None
                 packet_handlers = self._handlers.get(type(packet), [])
                 for handler in packet_handlers:
-                    handler(packet)
-                response = packet.get_response()
-                if response:
+                    handler_response = handler(packet)
+                    if handler_response:
+                        if response:
+                            raise MultipleResponses
+                        else:
+                            response = handler_response
+                if response is None:
+                    response = packet.default_response()
+                if response is not None:
                     self.ser.write(bytes(response))
             except Exception as e:
                 if self._should_exit: # exception expected

@@ -75,18 +75,88 @@ class TestBlipper(unittest.TestCase):
         self.assertTrue(waiter.has_all())
 
     def test_redraw_ok(self):
-
         display = 0
         rows = [[1] * 128] * 64
         redraw = blipper.RedrawPixels.from_matrix(display, rows)
-        waiter = Waiter(bytes(redraw))
+        waiter = Waiter(bytes(redraw), 'ok')
 
         def on_redraw(packet):
-            logger.info('got %s', bytes(packet))
             waiter.got(bytes(packet))
         self.slave.on(blipper.RedrawPixels, on_redraw)
 
+        def on_ok(packet):
+            waiter.got('ok')
+        self.master.on(blipper.Ok, on_ok)
+
         self.master.send(redraw)
+        waiter.wait(1.0)
+        self.assertTrue(waiter.has_all())
+
+    def test_buy_ok(self):
+        button = 3
+        buy = blipper.Buy.from_button(button)
+        new_balance = 5000
+        waiter = Waiter(button, new_balance)
+
+        def on_buy(packet):
+            waiter.got(packet.get_button())
+            return blipper.NewBalance.from_new_balance(new_balance)
+        self.slave.on(blipper.Buy, on_buy)
+
+        def on_buy_ok(packet):
+            waiter.got(packet.get_new_balance())
+        self.master.on(blipper.NewBalance, on_buy_ok)
+
+        self.master.send(buy)
+        waiter.wait(1.0)
+        self.assertTrue(waiter.has_all())
+
+    def test_insufficient_funds(self):
+        button = 2
+        buy = blipper.Buy.from_button(button)
+        waiter = Waiter(button, 1337)
+
+        def on_buy(packet):
+            waiter.got(packet.get_button())
+            return blipper.InsufficientFunds.from_balance(1337)
+        self.slave.on(blipper.Buy, on_buy)
+
+        def on_insufficient_fund(packet):
+            waiter.got(packet.get_balance())
+        self.master.on(blipper.InsufficientFunds, on_insufficient_fund)
+
+        self.master.send(buy)
+        waiter.wait(1.0)
+        self.assertTrue(waiter.has_all())
+
+    def test_multiple_buys(self):
+        button_responses = {
+            0: blipper.NewBalance.from_new_balance(0),
+            1: blipper.NewBalance.from_new_balance(1),
+            2: blipper.InsufficientFunds.from_balance(1337),
+        }
+
+        button_presses = [0, 1, 2]
+        buys = map(blipper.Buy.from_button, button_presses)
+        waiter = Waiter('b0', 'b1', 'b2', 'nb0', 'nb1', 'i1337')
+
+        def on_buy(packet):
+            got_button = packet.get_button()
+            waiter.got('b%s' % got_button)
+            return button_responses[got_button]
+
+        self.slave.on(blipper.Buy, on_buy)
+
+        def on_buy_ok(packet):
+            waiter.got('nb%s' % packet.get_new_balance())
+        self.master.on(blipper.NewBalance, on_buy_ok)
+
+        def on_insufficient(packet):
+            waiter.got('i%s' % packet.get_balance())
+        self.master.on(blipper.InsufficientFunds, on_insufficient)
+
+        for buy in buys:
+            self.master.send(buy)
         waiter.wait(1.0)
         self.assertTrue(waiter.has_all())
 
