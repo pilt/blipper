@@ -5,6 +5,7 @@ import threading
 import time
 from collections import defaultdict
 import logging
+import datetime
 
 from serial import Serial
 
@@ -196,6 +197,22 @@ class InsufficientFunds(Response):
     def get_balance(self):
         return struct.unpack(self.fmt, self.body)[0]
 
+
+@packet_type
+class InvalidCardId(Response):
+    cmd = chr(0x08)
+
+
+@packet_type
+class NextShift(Response):
+    cmd = chr(0x09)
+
+    @classmethod
+    def from_text(cls, text):
+        if isinstance(text, str):
+            text = text.decode('utf-8')
+        body = text.encode('ascii')
+        return NextShift.from_body(body)
 
 
 class Thread(threading.Thread):
