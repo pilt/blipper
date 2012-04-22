@@ -22,6 +22,8 @@ def dump():
     dump_to_files('pong', blipper.Pong())
     dump_to_files('ok', blipper.Ok())
     dump_to_files('fail', blipper.Fail())
+    dump_to_files('invalid_card_id', blipper.InvalidCardId())
+    dump_to_files('next_shift', blipper.NextShift.from_text(u'fm 2012-04-23'))
 
     display = 0
     rows_on = [[1] * 128] * 64
