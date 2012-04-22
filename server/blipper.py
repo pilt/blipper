@@ -30,7 +30,7 @@ def get_checksum(buf):
     checksum = 0x00
     for byte in buf:
         checksum += ord(byte)
-    return chr(checksum % 0xff)
+    return chr(checksum % (0xff + 1))
 
 
 class Header(object):
