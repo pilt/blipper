@@ -2,13 +2,15 @@ import sys
 import struct
 import re
 import threading
-import time
 from collections import defaultdict
 import logging
 
 from serial import Serial
 
-TTY = '/dev/master'
+if sys.platform.startswith("linux"):
+    TTY = '/dev/ttyUSB0'
+else:
+    TTY = '/dev/master'
 BAUD_RATE = 9600
 PREAMBLE = chr(0xaa) + chr(0x55)
 
@@ -30,7 +32,7 @@ def get_checksum(buf):
     checksum = 0x00
     for byte in buf:
         checksum += ord(byte)
-    return chr(checksum % 0xff)
+    return chr(checksum % (0xff + 1))
 
 
 class Header(object):
@@ -235,7 +237,8 @@ class Thread(threading.Thread):
 
     def get_packet(self):
         self.waiting_for_packet = True
-        header = unpack_header(self.ser.read(Header.length))
+        data = self.ser.read(Header.length)
+        header = unpack_header(data)
         body = self.ser.read(header.body_length)
         cs = self.ser.read(1)
         self.waiting_for_packet = False
@@ -252,6 +255,9 @@ class Thread(threading.Thread):
             try:
                 packet = self.get_packet()
                 response = None
+                print type(packet)
+                print packet.get_button()
+                print packet.get_card_id()
                 packet_handlers = self._handlers.get(type(packet), [])
                 for handler in packet_handlers:
                     handler_response = handler(packet)
