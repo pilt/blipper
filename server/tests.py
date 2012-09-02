@@ -133,6 +133,48 @@ class TestBlipper(unittest.TestCase):
         waiter.wait(1.0)
         self.assertTrue(waiter.has_all())
 
+    def test_invalid_card_id(self):
+        button = 2
+        card_id = 2**32 - 5
+        invalid_card = blipper.InvalidCardId()
+        buy = blipper.Buy.from_button_and_card_id(button, card_id)
+        waiter = Waiter(button, card_id, bytes(invalid_card))
+
+        def on_buy(packet):
+            waiter.got(packet.get_button())
+            waiter.got(packet.get_card_id())
+            return invalid_card
+        self.slave.on(blipper.Buy, on_buy)
+
+        def on_invalid_card_id(packet):
+            waiter.got(bytes(packet))
+        self.master.on(blipper.InvalidCardId, on_invalid_card_id)
+
+        self.master.send(buy)
+        waiter.wait(1.0)
+        self.assertTrue(waiter.has_all())
+
+    def test_next_shift(self):
+        button = 2
+        card_id = 2**32 - 5
+        next_shift = blipper.NextShift.from_text(u'fm 2012-04-23')
+        buy = blipper.Buy.from_button_and_card_id(button, card_id)
+        waiter = Waiter(button, card_id, bytes(next_shift))
+
+        def on_buy(packet):
+            waiter.got(packet.get_button())
+            waiter.got(packet.get_card_id())
+            return next_shift
+        self.slave.on(blipper.Buy, on_buy)
+
+        def on_next_shift(packet):
+            waiter.got(bytes(packet))
+        self.master.on(blipper.NextShift, on_next_shift)
+
+        self.master.send(buy)
+        waiter.wait(1.0)
+        self.assertTrue(waiter.has_all())
+
     def test_multiple_buys(self):
         button_responses = {
             0: blipper.NewBalance.from_new_balance(0),
