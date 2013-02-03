@@ -122,8 +122,8 @@ class Pong(Response):
 class RedrawPixels(Request):
     """
     1 byte display index. A display has 128x64 pixels. Pixel data for one
-    row is packed to 16 bytes (128/8). 1B + 16B * 64  = 1,025 bytes display 
-    index and pixel data. 
+    row is packed to 16 bytes (128/8). 1B + 16B * 64  = 1,025 bytes display
+    index and pixel data.
     """
     cmd = chr(0x04)
     num_rows = 64
@@ -132,7 +132,7 @@ class RedrawPixels(Request):
 
     @classmethod
     def from_matrix(cls, display, rows):
-        assert len(rows) == cls.num_rows 
+        assert len(rows) == cls.num_rows
         body_byte_ints = []
         for row in rows:
             assert len(row) == cls.num_cols
@@ -272,9 +272,6 @@ class Thread(threading.Thread):
             try:
                 packet = self.get_packet()
                 response = None
-                print type(packet)
-                print packet.get_button()
-                print packet.get_card_id()
                 packet_handlers = self._handlers.get(type(packet), [])
                 for handler in packet_handlers:
                     handler_response = handler(packet)
