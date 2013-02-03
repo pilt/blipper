@@ -4,7 +4,6 @@ import re
 import threading
 from collections import defaultdict
 import logging
-import datetime
 
 from serial import Serial
 
@@ -17,12 +16,21 @@ PREAMBLE = chr(0xaa) + chr(0x55)
 
 logger = logging.getLogger('blipper')
 
-class BlipperError(Exception): pass
-class PacketError(BlipperError): pass
-class MultipleResponses(BlipperError): pass
+
+class BlipperError(Exception):
+    pass
+
+
+class PacketError(BlipperError):
+    pass
+
+
+class MultipleResponses(BlipperError):
+    pass
 
 
 packet_types = {}
+
 
 def packet_type(cls):
     packet_types[cls.cmd] = cls
@@ -156,7 +164,7 @@ class Buy(Request):
 
     @classmethod
     def from_button_and_card_id(cls, button, card_id):
-        if 0 <= button <= 255 and 0 <= card_id <= 2**32 - 1:
+        if 0 <= button <= 255 and 0 <= card_id <= 2 ** 32 - 1:
             body = struct.pack(cls.fmt, button, card_id)
             return Buy.from_body(body)
         raise BlipperError(button)
@@ -219,7 +227,8 @@ class NextShift(Response):
 
 class Thread(threading.Thread):
 
-    def __init__(self, tty=TTY, baud_rate=BAUD_RATE, logger=None, *args, **kwargs):
+    def __init__(self, tty=TTY, baud_rate=BAUD_RATE, logger=None, *args,
+                 **kwargs):
         if logger is None:
             self.logger = logging.getLogger('blipper.thread')
         else:
@@ -285,7 +294,7 @@ class Thread(threading.Thread):
                 if response is not None:
                     self.ser.write(bytes(response))
             except Exception as e:
-                if self._should_exit: # exception expected
+                if self._should_exit:  # exception expected
                     break
                 else:
                     raise e

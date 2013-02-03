@@ -2,8 +2,6 @@ import logging
 import unittest
 import time
 
-from serial import Serial
-
 import blipper
 
 logging.basicConfig(level=logging.DEBUG)
@@ -38,7 +36,6 @@ class Waiter(object):
                 break
 
 
-
 class TestBlipper(unittest.TestCase):
 
     def setUp(self):
@@ -48,7 +45,8 @@ class TestBlipper(unittest.TestCase):
         self.slave.start()
         while True:
             time.sleep(0.1)
-            if self.master.waiting_for_packet and self.slave.waiting_for_packet:
+            if self.master.waiting_for_packet and \
+                    self.slave.waiting_for_packet:
                 break
 
     def tearDown(self):
@@ -94,7 +92,7 @@ class TestBlipper(unittest.TestCase):
 
     def test_buy_ok(self):
         button = 3
-        card_id = 2**32 - 5
+        card_id = 2 ** 32 - 5
         buy = blipper.Buy.from_button_and_card_id(button, card_id)
         new_balance = 5000
         waiter = Waiter(button, new_balance, card_id)
@@ -115,7 +113,7 @@ class TestBlipper(unittest.TestCase):
 
     def test_insufficient_funds(self):
         button = 2
-        card_id = 2**32 - 5
+        card_id = 2 ** 32 - 5
         buy = blipper.Buy.from_button_and_card_id(button, card_id)
         waiter = Waiter(button, 1337, card_id)
 
@@ -135,7 +133,7 @@ class TestBlipper(unittest.TestCase):
 
     def test_invalid_card_id(self):
         button = 2
-        card_id = 2**32 - 5
+        card_id = 2 ** 32 - 5
         invalid_card = blipper.InvalidCardId()
         buy = blipper.Buy.from_button_and_card_id(button, card_id)
         waiter = Waiter(button, card_id, bytes(invalid_card))
@@ -156,7 +154,7 @@ class TestBlipper(unittest.TestCase):
 
     def test_next_shift(self):
         button = 2
-        card_id = 2**32 - 5
+        card_id = 2 ** 32 - 5
         next_shift = blipper.NextShift.from_text(u'fm 2012-04-23')
         buy = blipper.Buy.from_button_and_card_id(button, card_id)
         waiter = Waiter(button, card_id, bytes(next_shift))
@@ -183,7 +181,7 @@ class TestBlipper(unittest.TestCase):
         }
 
         button_presses = [0, 1, 2]
-        card_id = 2**32 - 5
+        card_id = 2 ** 32 - 5
         from_func = blipper.Buy.from_button_and_card_id
         buys = [from_func(btn, card_id) for btn in button_presses]
         waiter = Waiter(

@@ -2,6 +2,7 @@ import random
 
 import blipper
 
+
 def dump_to_files(name, cmd):
     with open('dumps/%s.bin' % name, 'wb') as f:
         f.write(bytes(cmd))
