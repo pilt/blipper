@@ -10,3 +10,7 @@ Before you begin, you need to install some Arduino libraries. Copy the contents 
 # Misc
 
 To download a sketch to the "blipper board", select "Arduino Duemilanove w/ ATmega328" from the Board menu.
+
+The following list is the list of all characters used in person names in the database. Make sure all these are displayable.
+
+    -.ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwxyzÄÅÉÖáäåéöüý
