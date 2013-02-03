@@ -4,3 +4,6 @@
 
 # /blippare_pde
 	Arduino project dir. Arduino IDE likes to have this directory.
+
+# /blippardisplay
+	Display test project. Open with the Arduino IDE. See `blippardisplay/Display.cpp` for pin connections.
